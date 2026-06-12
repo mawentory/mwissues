@@ -9,30 +9,30 @@
       <div class="mb-3">
         <label class="form-label fw-semibold" for="title">Title <span class="text-danger">*</span></label>
         <input type="text" id="title" name="title" class="form-control"
-               value="{{ flask.request.form.get('title', '') }}" required autofocus>
+               value="{{ request.form.get('title', '') }}" required autofocus>
       </div>
 
       <div class="mb-3">
         <label class="form-label fw-semibold" for="description">Description <span class="text-danger">*</span></label>
         <textarea id="description" name="description" class="form-control"
-                  rows="3">{{ flask.request.form.get('description', '') }}</textarea>
+                  rows="3">{{ request.form.get('description', '') }}</textarea>
       </div>
 
       <div class="mb-3">
         <label class="form-label fw-semibold" for="details">Details</label>
         <textarea id="details" name="details" class="form-control"
-                  rows="5" placeholder="Steps to reproduce, notes, additional context…">{{ flask.request.form.get('details', '') }}</textarea>
+                  rows="5" placeholder="Steps to reproduce, notes, additional context…">{{ request.form.get('details', '') }}</textarea>
       </div>
 
       <div class="mb-4">
         <label class="form-label fw-semibold" for="priority">Priority <span class="text-danger">*</span></label>
         <select id="priority" name="priority" class="form-select" required>
           <option value="">Select priority…</option>
-          <option value="A" {% if flask.request.form.get('priority') == 'A' %}selected{% endif %}>A — Must Do</option>
-          <option value="B" {% if flask.request.form.get('priority') == 'B' %}selected{% endif %}>B — Should Do</option>
-          <option value="C" {% if flask.request.form.get('priority') == 'C' %}selected{% endif %}>C — Nice to Do</option>
-          <option value="D" {% if flask.request.form.get('priority') == 'D' %}selected{% endif %}>D — Think about</option>
-          <option value="E" {% if flask.request.form.get('priority') == 'E' %}selected{% endif %}>E — Eliminate</option>
+          <option value="A" {% if request.form.get('priority') == 'A' %}selected{% endif %}>A — Must Do</option>
+          <option value="B" {% if request.form.get('priority') == 'B' %}selected{% endif %}>B — Should Do</option>
+          <option value="C" {% if request.form.get('priority') == 'C' %}selected{% endif %}>C — Nice to Do</option>
+          <option value="D" {% if request.form.get('priority') == 'D' %}selected{% endif %}>D — Think about</option>
+          <option value="E" {% if request.form.get('priority') == 'E' %}selected{% endif %}>E — Eliminate</option>
         </select>
       </div>
 
