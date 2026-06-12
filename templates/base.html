@@ -49,10 +49,13 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container">
       <a class="navbar-brand" href="{{ url_for('index') }}">mwissues</a>
-      <div class="navbar-nav ms-auto">
+      <div class="navbar-nav me-auto">
         <a class="nav-link" href="{{ url_for('index') }}">Issues</a>
         <a class="nav-link" href="{{ url_for('new_issue') }}">+ New Issue</a>
       </div>
+      <form class="d-flex" id="web-toggle-form" method="post" action="{{ url_for('web_stop') }}">
+        <button class="btn btn-outline-light btn-sm" type="submit">Stop Web</button>
+      </form>
     </div>
   </nav>
 

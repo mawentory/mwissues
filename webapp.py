@@ -487,3 +487,21 @@ def edit_todo(issue_id, idx):
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+# ---------------------------------------------------------------------------
+# Web control endpoints
+# ---------------------------------------------------------------------------
+
+@app.route("/web/status")
+def web_status():
+    return flask.jsonify({"status": "ok"})
+
+
+@app.route("/web/stop", methods=["POST"])
+def web_stop():
+    func = flask.request.environ.get("werkzeug.server.shutdown")
+    if func is None:
+        return flask.jsonify({"error": "not supported"}), 500
+    func()
+    return "", 204

@@ -1,7 +1,12 @@
 """mwissues CLI - Personal issue tracker."""
 import json
 import os
+import sys
 from pathlib import Path
+
+_root = Path(__file__).resolve().parent.parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 
 import click
 import sqlite3
@@ -60,6 +65,10 @@ Personal issue tracker for managing tasks, bugs, and feature requests.
 - `mwissues remove-todo <id> <index>` - Remove a todo
 - `mwissues edit-todo <id> <index> <text>` - Edit todo text
 
+## Web Interface
+
+- `mwissues web start [--port <port>] [--no-browser]` - Start the web interface (Ctrl+C to stop)
+
 ## Tag Notes
 
 - Tags are case-sensitive, unique per issue, and similar to username in term of rules. example tags: auth, bug, upload-image
@@ -99,6 +108,9 @@ mwissues add-todo 1 "Write unit tests"
 mwissues check-todo 1 1
 mwissues edit-todo 1 1 "Write comprehensive tests"
 mwissues remove-todo 1 1
+
+# Web interface
+mwissues web start
 ```
 """
 
@@ -123,17 +135,17 @@ def init(default):
     """Initialize database and instructions."""
     db_path = Path.cwd() / DB_NAME
     instructions_path = Path.cwd() / INSTRUCTIONS_NAME
-    
+
     if db_path.exists() and not default:
         click.echo(f"{DB_NAME} already exists")
         return
-    
+
     if not db_path.exists():
         conn = sqlite3.connect(db_path)
         conn.executescript(SCHEMA)
         conn.close()
         click.echo(f"Initialized {DB_NAME}")
-    
+
     instructions_path.write_text(INSTRUCTIONS_CONTENT)
     if default:
         click.echo(f"Restored {INSTRUCTIONS_NAME}")
@@ -244,27 +256,27 @@ def list(output_json, output_human):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT id, title, description, priority, status, created_at
             FROM issues
             WHERE status = 'active'
             ORDER BY priority, created_at DESC
         """)
-        
+
         issues = []
         for row in cursor.fetchall():
             issue_id, title, description, priority, status, created_at = row
-            
+
             cursor.execute("SELECT COUNT(*), SUM(done) FROM todos WHERE issue_id = ?", (issue_id,))
             todo_total, todo_done = cursor.fetchone() or (0, 0)
-            
+
             cursor.execute("SELECT name FROM tags WHERE issue_id = ?", (issue_id,))
             tags = [t[0] for t in cursor.fetchall()]
-            
+
             cursor.execute("SELECT id, text, done FROM todos WHERE issue_id = ? ORDER BY id", (issue_id,))
             todos = [{"id": row[0], "text": row[1], "done": bool(row[2])} for row in cursor.fetchall()]
-            
+
             issues.append({
                 "id": issue_id,
                 "title": title,
@@ -277,9 +289,9 @@ def list(output_json, output_human):
                 "todos": todos,
                 "created_at": created_at
             })
-        
+
         conn.close()
-        
+
         if output_json:
             click.echo(json.dumps({"issues": issues}, indent=2))
         elif output_human:
@@ -318,7 +330,7 @@ def list(output_json, output_human):
                 click.echo("")
                 click.echo("---")
                 click.echo("")
-    
+
     except click.ClickException:
         raise
     except Exception as e:
@@ -569,6 +581,29 @@ def edit_todo(issue_id, index, text):
     conn.close()
 
     click.echo(f'Todo #{index} updated: "{text}"')
+
+
+@cli.group()
+def web():
+    """Manage the local web server."""
+
+
+@web.command()
+@click.option("--port", default=5173, show_default=True, type=int, help="Port to listen on")
+@click.option("--no-browser", is_flag=True, help="Do not open a browser window")
+def start(port, no_browser):
+    """Start the web interface."""
+    from webapp import app
+
+    if not no_browser:
+        try:
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{port}")
+        except Exception:
+            pass
+
+    click.echo(f"Web running on http://127.0.0.1:{port} — press Ctrl+C to stop")
+    app.run(host="127.0.0.1", port=port)
 
 
 if __name__ == "__main__":
