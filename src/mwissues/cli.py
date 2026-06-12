@@ -45,25 +45,27 @@ Personal issue tracker for managing tasks, bugs, and feature requests.
 
 ## Commands
 
-- `mwissues init` - Initialize database and instructions
-- `mwissues add <title> [-d <description>] [-p <priority>]` - Add new issue
+- `mwissues init [-d|--default]` - Initialize database and instructions; `--default` restores `mwissues.md` without touching the database
+- `mwissues add <title> [-d <description>] [--details <details>] [-p <priority>]` - Add new issue
 - `mwissues list [--json|--human]` - List all issues
-- `mwissues show <id>` - Show issue details
+- `mwissues show <id>` - Show issue details, including description, details, tags, and todos
 - `mwissues archive <id>` - Archive an issue
 - `mwissues delete <id>` - Permanently delete an issue
+- `mwissues add-tags <id> <tag>...` - Add one or more tags separated by space to an issue
+- `mwissues remove-tags <id> <tag>...` - Remove one or more tags separated by space from an issue
+- `mwissues rename-tags <old> <new>` - Rename a tag across all issues
 - `mwissues add-todo <id> <text>` - Add a todo to an issue
 - `mwissues check-todo <id> <index>` - Mark a todo as done
 - `mwissues uncheck-todo <id> <index>` - Mark a todo as not done
 - `mwissues remove-todo <id> <index>` - Remove a todo
 - `mwissues edit-todo <id> <index> <text>` - Edit todo text
 
-## Priority Levels
+## Tag Notes
 
-- **A** - Critical, must be addressed immediately
-- **B** - High priority
-- **C** - Medium priority (default)
-- **D** - Low priority
-- **E** - Nice to have
+- Tags are case-sensitive, unique per issue, and similar to username in term of rules. example tags: auth, bug, upload-image
+- Use multiple tags in one command for batch operations.
+- `add-tags` skips tags that already exist on the issue.
+- `rename-tags` updates every occurrence of the old tag.
 
 ## Examples
 
@@ -72,7 +74,7 @@ Personal issue tracker for managing tasks, bugs, and feature requests.
 mwissues init
 
 # Add an issue
-mwissues add "Fix login bug" -d "Users cannot log in with special chars" -p A
+mwissues add "Fix login bug" -d "Users cannot log in with special chars" --details "Steps to reproduce:\n1. Go to /login\n2. Enter credentials" -p A
 
 # List issues
 mwissues list
@@ -84,6 +86,13 @@ mwissues show 1
 # Archive/Delete
 mwissues archive 1
 mwissues delete 1
+
+# Tag management
+mwissues add-tags 1 auth bug
+mwissues add-tags 1 frontend
+mwissues remove-tags 1 bug
+mwissues rename-tags auth login
+mwissues remove-tags 1 auth login
 
 # Todo management
 mwissues add-todo 1 "Write unit tests"
@@ -109,23 +118,122 @@ def cli():
 
 
 @cli.command()
-def init():
+@click.option("-d", "--default", is_flag=True, help="Restore mwissues.md without touching the database")
+def init(default):
     """Initialize database and instructions."""
     db_path = Path.cwd() / DB_NAME
     instructions_path = Path.cwd() / INSTRUCTIONS_NAME
     
-    if db_path.exists():
+    if db_path.exists() and not default:
         click.echo(f"{DB_NAME} already exists")
         return
     
-    conn = sqlite3.connect(db_path)
-    conn.executescript(SCHEMA)
-    conn.close()
+    if not db_path.exists():
+        conn = sqlite3.connect(db_path)
+        conn.executescript(SCHEMA)
+        conn.close()
+        click.echo(f"Initialized {DB_NAME}")
     
     instructions_path.write_text(INSTRUCTIONS_CONTENT)
-    
-    click.echo(f"Initialized {DB_NAME}")
+    if default:
+        click.echo(f"Restored {INSTRUCTIONS_NAME}")
+        return
     click.echo(f"Created {INSTRUCTIONS_NAME}")
+
+
+@cli.command()
+@click.argument("title")
+@click.option("--priority", required=True, type=click.Choice(["A", "B", "C", "D", "E"]), help="Priority level")
+@click.option("--description", required=True, help="Issue description")
+@click.option("--details", default="", help="Additional details")
+def add(title, priority, description, details):
+    """Add a new issue."""
+    conn = sqlite3.connect(Path.cwd() / DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO issues (title, description, details, priority) VALUES (?, ?, ?, ?)",
+        (title, description, details, priority),
+    )
+    issue_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    click.echo(f"Issue #{issue_id} created: [{priority}] {title}")
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+def archive(issue_id):
+    """Archive an issue."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM issues WHERE id = ?", (issue_id,))
+    if cursor.fetchone() is None:
+        conn.close()
+        click.echo(f"Issue #{issue_id} not found")
+        return
+    cursor.execute("UPDATE issues SET status = 'inactive' WHERE id = ?", (issue_id,))
+    conn.commit()
+    conn.close()
+    click.echo(f"Issue #{issue_id} archived")
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.option("--title", help="Issue title")
+@click.option("--description", help="Issue description")
+@click.option("--details", help="Additional details")
+@click.option("--priority", type=click.Choice(["A", "B", "C", "D", "E"]), help="Priority level")
+def edit(issue_id, title, description, details, priority):
+    """Edit an issue."""
+    _verify_issue_exists(issue_id)
+    if not any([title, description, details, priority]):
+        raise click.ClickException("No update fields provided")
+
+    fields = []
+    values = []
+    if title:
+        fields.append("title = ?")
+        values.append(title)
+    if description is not None:
+        fields.append("description = ?")
+        values.append(description)
+    if details is not None:
+        fields.append("details = ?")
+        values.append(details)
+    if priority:
+        fields.append("priority = ?")
+        values.append(priority)
+    values.append(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE issues SET {', '.join(fields)} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+    updated_fields = []
+    if title:
+        updated_fields.append("title")
+    if description is not None:
+        updated_fields.append("description")
+    if details is not None:
+        updated_fields.append("details")
+    if priority:
+        updated_fields.append("priority")
+    click.echo(f"Updated: issue #{issue_id} {', '.join(updated_fields)}")
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+def delete(issue_id):
+    """Permanently delete an issue."""
+    _verify_issue_exists(issue_id)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM issues WHERE id = ?", (issue_id,))
+    conn.commit()
+    conn.close()
+    click.echo(f"Issue #{issue_id} deleted")
 
 
 @cli.command()
@@ -154,6 +262,9 @@ def list(output_json, output_human):
             cursor.execute("SELECT name FROM tags WHERE issue_id = ?", (issue_id,))
             tags = [t[0] for t in cursor.fetchall()]
             
+            cursor.execute("SELECT id, text, done FROM todos WHERE issue_id = ? ORDER BY id", (issue_id,))
+            todos = [{"id": row[0], "text": row[1], "done": bool(row[2])} for row in cursor.fetchall()]
+            
             issues.append({
                 "id": issue_id,
                 "title": title,
@@ -163,6 +274,7 @@ def list(output_json, output_human):
                 "tags": tags,
                 "todos_total": todo_total or 0,
                 "todos_done": todo_done or 0,
+                "todos": todos,
                 "created_at": created_at
             })
         
@@ -188,15 +300,21 @@ def list(output_json, output_human):
             for issue in issues:
                 click.echo(f"## Issue #{issue['id']}: {issue['title']}\n")
                 click.echo(f"- **Priority:** {issue['priority']}")
-                tags_str = ", ".join(issue["tags"]) if issue["tags"] else ""
-                click.echo(f"- **Tags:** {tags_str}")
                 click.echo(f"- **Status:** {issue['status']}")
                 click.echo(f"- **Created:** {issue['created_at']}")
                 if issue['description']:
                     click.echo(f"- **Description:** {issue['description']}")
                 tags_str = ", ".join(issue["tags"]) if issue["tags"] else ""
-                click.echo(f"- **Tags:** {tags_str}")
-                click.echo(f"- **Todos:** {issue['todos_done']}/{issue['todos_total']}")
+                if tags_str:
+                    click.echo(f"- **Tags:** {tags_str}")
+                todo_parts = []
+                for todo in issue.get("todos", []):
+                    done = "x" if todo["done"] else " "
+                    todo_parts.append(f"- [{done}] {todo['text']}")
+                if todo_parts:
+                    click.echo("- **Todos:**")
+                    for part in todo_parts:
+                        click.echo(part)
                 click.echo("")
                 click.echo("---")
                 click.echo("")
@@ -211,8 +329,6 @@ def list(output_json, output_human):
 @click.argument("issue_id", type=int)
 def show(issue_id):
     """Show issue details."""
-    _verify_issue_exists(issue_id)
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -224,7 +340,8 @@ def show(issue_id):
     row = cursor.fetchone()
     if row is None:
         conn.close()
-        raise click.ClickException(f"Issue #{issue_id} not found")
+        click.echo(f"Issue #{issue_id} not found")
+        return
 
     issue_id, title, description, details, priority, status, created_at = row
 
@@ -235,9 +352,6 @@ def show(issue_id):
     todos = cursor.fetchall()
     conn.close()
 
-    tag_text = ", ".join(tags) if tags else "None"
-    todo_text = ", ".join([f"[{'x' if todo[2] else ' '}] {todo[0]}. {todo[1]}" for todo in todos]) if todos else "None"
-
     click.echo(f"# Issue #{issue_id}: {title}\n")
     click.echo(f"- **ID:** {issue_id}")
     click.echo(f"- **Priority:** {priority}")
@@ -247,8 +361,15 @@ def show(issue_id):
         click.echo(f"- **Description:** {description}")
     if details:
         click.echo(f"- **Details:** {details}")
+    tag_text = ", ".join(tags) if tags else "None"
     click.echo(f"- **Tags:** {tag_text}")
-    click.echo(f"- **Todos:** {todo_text}")
+    if todos:
+        click.echo("- **Todos:**")
+        for todo in todos:
+            done = "x" if todo[2] else " "
+            click.echo(f"- [{done}] {todo[0]}. {todo[1]}")
+    else:
+        click.echo("- **Todos:** None")
     click.echo("")
     click.echo("---")
     click.echo("")
