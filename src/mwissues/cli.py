@@ -207,6 +207,53 @@ def list(output_json, output_human):
         raise click.ClickException(str(e))
 
 
+@cli.command()
+@click.argument("issue_id", type=int)
+def show(issue_id):
+    """Show issue details."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, title, description, details, priority, status, created_at
+        FROM issues
+        WHERE id = ?
+    """, (issue_id,))
+    row = cursor.fetchone()
+    if row is None:
+        conn.close()
+        raise click.ClickException(f"Issue #{issue_id} not found")
+
+    issue_id, title, description, details, priority, status, created_at = row
+
+    cursor.execute("SELECT name FROM tags WHERE issue_id = ?", (issue_id,))
+    tags = [t[0] for t in cursor.fetchall()]
+
+    cursor.execute("SELECT id, text, done FROM todos WHERE issue_id = ? ORDER BY id", (issue_id,))
+    todos = cursor.fetchall()
+    conn.close()
+
+    tag_text = ", ".join(tags) if tags else "None"
+    todo_text = ", ".join([f"[{'x' if todo[2] else ' '}] {todo[0]}. {todo[1]}" for todo in todos]) if todos else "None"
+
+    click.echo(f"# Issue #{issue_id}: {title}\n")
+    click.echo(f"- **ID:** {issue_id}")
+    click.echo(f"- **Priority:** {priority}")
+    click.echo(f"- **Status:** {status}")
+    click.echo(f"- **Created:** {created_at}")
+    if description:
+        click.echo(f"- **Description:** {description}")
+    if details:
+        click.echo(f"- **Details:** {details}")
+    click.echo(f"- **Tags:** {tag_text}")
+    click.echo(f"- **Todos:** {todo_text}")
+    click.echo("")
+    click.echo("---")
+    click.echo("")
+
+
 def _verify_issue_exists(issue_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
