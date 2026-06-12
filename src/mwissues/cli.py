@@ -51,6 +51,11 @@ Personal issue tracker for managing tasks, bugs, and feature requests.
 - `mwissues show <id>` - Show issue details
 - `mwissues archive <id>` - Archive an issue
 - `mwissues delete <id>` - Permanently delete an issue
+- `mwissues add-todo <id> <text>` - Add a todo to an issue
+- `mwissues check-todo <id> <index>` - Mark a todo as done
+- `mwissues uncheck-todo <id> <index>` - Mark a todo as not done
+- `mwissues remove-todo <id> <index>` - Remove a todo
+- `mwissues edit-todo <id> <index> <text>` - Edit todo text
 
 ## Priority Levels
 
@@ -79,6 +84,12 @@ mwissues show 1
 # Archive/Delete
 mwissues archive 1
 mwissues delete 1
+
+# Todo management
+mwissues add-todo 1 "Write unit tests"
+mwissues check-todo 1 1
+mwissues edit-todo 1 1 "Write comprehensive tests"
+mwissues remove-todo 1 1
 ```
 """
 
@@ -173,13 +184,22 @@ def list(output_json, output_human):
             if not issues:
                 click.echo("No issues found.")
                 return
-            click.echo("| ID | Priority | Status | Title | Description | Tags | Todos |")
-            click.echo("|----|----------|--------|-------|-------------|------|-------|")
+            click.echo(f"# Issues ({len(issues)} total)\n")
             for issue in issues:
-                tags_str = ",".join(issue["tags"]) if issue["tags"] else ""
-                todos_str = f"{issue['todos_done']}/{issue['todos_total']}"
-                desc = (issue["description"][:44] + "...") if len(issue["description"]) > 47 else issue["description"]
-                click.echo(f"| {issue['id']} | {issue['priority']} | {issue['status']} | {issue['title'][:20]} | {desc[:45]} | {tags_str} | {todos_str} |")
+                click.echo(f"## Issue #{issue['id']}: {issue['title']}\n")
+                click.echo(f"- **Priority:** {issue['priority']}")
+                tags_str = ", ".join(issue["tags"]) if issue["tags"] else ""
+                click.echo(f"- **Tags:** {tags_str}")
+                click.echo(f"- **Status:** {issue['status']}")
+                click.echo(f"- **Created:** {issue['created_at']}")
+                if issue['description']:
+                    click.echo(f"- **Description:** {issue['description']}")
+                tags_str = ", ".join(issue["tags"]) if issue["tags"] else ""
+                click.echo(f"- **Tags:** {tags_str}")
+                click.echo(f"- **Todos:** {issue['todos_done']}/{issue['todos_total']}")
+                click.echo("")
+                click.echo("---")
+                click.echo("")
     
     except click.ClickException:
         raise
@@ -332,6 +352,55 @@ def uncheck_todo(issue_id, index):
     conn.close()
 
     click.echo(f'Todo #{index} unchecked: "{text}"')
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("index", type=int)
+def remove_todo(issue_id, index):
+    """Remove a todo."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, text FROM todos WHERE issue_id = ? ORDER BY id LIMIT 1 OFFSET ?", (issue_id, index - 1))
+    todo = cursor.fetchone()
+
+    if todo is None:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} not found")
+
+    todo_id, text = todo
+    cursor.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    conn.commit()
+    conn.close()
+
+    click.echo(f'Todo #{index} removed: "{text}"')
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("index", type=int)
+@click.argument("text")
+def edit_todo(issue_id, index, text):
+    """Edit todo text."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM todos WHERE issue_id = ? ORDER BY id LIMIT 1 OFFSET ?", (issue_id, index - 1))
+    todo = cursor.fetchone()
+
+    if todo is None:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} not found")
+
+    todo_id = todo[0]
+    cursor.execute("UPDATE todos SET text = ? WHERE id = ?", (text, todo_id))
+    conn.commit()
+    conn.close()
+
+    click.echo(f'Todo #{index} updated: "{text}"')
 
 
 if __name__ == "__main__":

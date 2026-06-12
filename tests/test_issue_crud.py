@@ -55,8 +55,9 @@ def test_list_default_markdown_output(tmp_path, monkeypatch):
 
     result = runner.invoke(cli, ["list"])
     assert result.exit_code == 0, result.output
-    assert "| 1 | A | active |" in result.output
-    assert "Fix login bug" in result.output
+    assert "# Issues (1 total)" in result.output
+    assert "## Issue #1: Fix login bug" in result.output
+    assert "- **Priority:** A" in result.output
 
 
 def test_archive_marks_inactive(tmp_path, monkeypatch):
