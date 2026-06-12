@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}mwissues{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <style>
+    body { min-height: 100vh; }
+    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
+    .badge-priority-A { background-color: #dc3545; }
+    .badge-priority-B { background-color: #fd7e14; }
+    .badge-priority-C { background-color: #ffc107; color: #000; }
+    .badge-priority-D { background-color: #0d6efd; }
+    .badge-priority-E { background-color: #6c757d; }
+    .badge-status-active { background-color: #198754; }
+    .badge-status-inactive { background-color: #6c757d; }
+    .tag-pill {
+      display: inline-block;
+      padding: 0.2em 0.6em;
+      border-radius: 1rem;
+      background-color: #e9ecef;
+      color: #495057;
+      font-size: 0.8em;
+      text-decoration: none;
+      margin: 0.15em;
+    }
+    .tag-pill:hover { background-color: #dee2e6; color: #212529; }
+    .tag-pill.active {
+      background-color: #0d6efd;
+      color: #fff;
+    }
+    .tag-pill-remove {
+      text-decoration: none;
+      color: inherit;
+      opacity: 0.5;
+      margin-left: 0.3em;
+      font-size: 0.9em;
+    }
+    .tag-pill-remove:hover { opacity: 1; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    .todo-done { text-decoration: line-through; color: #6c757d; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('index') }}">mwissues</a>
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{{ url_for('index') }}">Issues</a>
+        <a class="nav-link" href="{{ url_for('new_issue') }}">+ New Issue</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+          crossorigin="anonymous"></script>
+</body>
+</html>

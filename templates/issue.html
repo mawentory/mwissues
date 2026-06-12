@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <a href="{{ url_for('index') }}">&larr; Back to Issues</a>
+  </div>
+  <div class="col-auto">
+    {% if issue.status == 'active' %}
+      <form method="post" action="{{ url_for('archive_issue', issue_id=issue.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-outline-secondary">Archive</button>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('delete_issue', issue_id=issue.id) }}" class="d-inline"
+          onsubmit="return confirm('Delete issue #{{ issue.id }}? This cannot be undone.');">
+      <button type="submit" class="btn btn-outline-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+{# Header #}
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+      <div>
+        <h3 class="mb-1">Issue #{{ issue.id }}</h3>
+        <p class="text-muted mb-1">
+          Created {{ issue.created_at }}
+          &nbsp;&mdash;&nbsp;
+          <span class="badge badge-priority-{{ issue.priority }}">{{ issue.priority }}</span>
+          <span class="badge badge-status-{{ issue.status }}">{{ issue.status }}</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Two-column layout #}
+<div class="row g-4">
+
+  {# ===== Left: Issue fields + Todos ===== #}
+  <div class="col-lg-8">
+
+    {# Edit issue fields #}
+    <div class="card mb-4">
+      <div class="card-header fw-bold">Issue Details</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('edit_issue', issue_id=issue.id) }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="title">Title</label>
+            <input type="text" id="title" name="title" class="form-control"
+                   value="{{ issue.title }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="description">Description</label>
+            <textarea id="description" name="description" class="form-control"
+                      rows="3">{{ issue.description or '' }}</textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="details">Details</label>
+            <textarea id="details" name="details" class="form-control"
+                      rows="5" placeholder="Steps to reproduce, notes, etc.">{{ issue.details or '' }}</textarea>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+              <label class="form-label fw-semibold" for="priority">Priority</label>
+              <select id="priority" name="priority" class="form-select">
+                {% for val, label in priority_labels.items() %}
+                  <option value="{{ val }}" {% if issue.priority == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label fw-semibold" for="status">Status</label>
+              <select id="status" name="status" class="form-select">
+                <option value="active" {% if issue.status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if issue.status == 'inactive' %}selected{% endif %}>Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+
+    {# Todos #}
+    <div class="card">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        Todos
+        <span class="badge bg-secondary">{{ todos|length }}</span>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for todo in todos %}
+          <li class="list-group-item d-flex align-items-start gap-2">
+            {# Check / Uncheck #}
+            {% if todo.done %}
+              <form method="post" action="{{ url_for('uncheck_todo', issue_id=issue.id, idx=loop.index) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-success" title="Mark not done">&#10003;</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('check_todo', issue_id=issue.id, idx=loop.index) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Mark done">&#10003;</button>
+              </form>
+            {% endif %}
+
+            {# Edit inline #}
+            <form method="post" action="{{ url_for('edit_todo', issue_id=issue.id, idx=loop.index) }}"
+                  class="d-flex flex-grow-1 gap-2">
+              <input type="text" name="text" class="form-control form-control-sm {% if todo.done %}todo-done{% endif %}"
+                     value="{{ todo.text }}">
+              <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+            </form>
+
+            {# Remove #}
+            <form method="post" action="{{ url_for('remove_todo', issue_id=issue.id, idx=loop.index) }}" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('Remove this todo?');">&times;</button>
+            </form>
+          </li>
+        {% else %}
+          <li class="list-group-item text-muted">No todos yet.</li>
+        {% endfor %}
+      </ul>
+
+      {# Add todo #}
+      <div class="card-body border-top">
+        <form method="post" action="{{ url_for('add_todo', issue_id=issue.id) }}" class="d-flex gap-2">
+          <input type="text" name="text" class="form-control form-control-sm"
+                 placeholder="Add a new todo…" required>
+          <button type="submit" class="btn btn-sm btn-primary">Add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Right: Tags ===== #}
+  <div class="col-lg-4">
+
+    {# Tags #}
+    <div class="card">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        Tags
+        <span class="badge bg-secondary">{{ tags|length }}</span>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for tag in tags %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('index') }}?tag={{ tag }}" class="tag-pill">{{ tag }}</a>
+            <form method="post" action="{{ url_for('remove_tag', issue_id=issue.id, tag_name=tag) }}" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-link text-muted p-0"
+                      title="Remove tag {{ tag }}"
+                      onclick="return confirm('Remove tag &quot;{{ tag }}&quot;?');">&times;</button>
+            </form>
+          </li>
+        {% else %}
+          <li class="list-group-item text-muted">No tags.</li>
+        {% endfor %}
+      </ul>
+      <div class="card-body border-top">
+        <form method="post" action="{{ url_for('add_tags', issue_id=issue.id) }}">
+          <label class="form-label small text-muted">Add tags</label>
+          <div class="input-group input-group-sm mb-2">
+            <input type="text" name="tags" class="form-control"
+                   placeholder="tag1, tag2 …">
+            <button type="submit" class="btn btn-outline-primary">Add</button>
+          </div>
+          <p class="text-muted small mb-0">Comma or space-separated</p>
+        </form>
+      </div>
+    </div>
+
+    {# Global tag rename (not issue-specific — shown here for convenience) #}
+    <div class="card mt-4">
+      <div class="card-header fw-bold small text-muted">Rename Tag Globally</div>
+      <div class="card-body py-2">
+        <form method="post" action="{{ url_for('rename_tags') }}" class="d-flex gap-2 align-items-center">
+          <input type="text" name="old_tag" class="form-control form-control-sm" placeholder="Old name" required>
+          <span class="text-muted">&rarr;</span>
+          <input type="text" name="new_tag" class="form-control form-control-sm" placeholder="New name" required>
+          <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
