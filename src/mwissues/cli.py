@@ -187,5 +187,152 @@ def list(output_json, output_human):
         raise click.ClickException(str(e))
 
 
+def _verify_issue_exists(issue_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM issues WHERE id = ?", (issue_id,))
+    if cursor.fetchone() is None:
+        conn.close()
+        raise click.ClickException(f"Issue #{issue_id} not found")
+    conn.close()
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("tags", nargs=-1, required=True)
+def add_tags(issue_id, tags):
+    """Add tags to an issue."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    for tag in tags:
+        cursor.execute("SELECT id FROM tags WHERE issue_id = ? AND name = ?", (issue_id, tag))
+        if cursor.fetchone():
+            click.echo(f"Skipped: '{tag}' already exists on issue #{issue_id}")
+            continue
+
+        cursor.execute("INSERT INTO tags (issue_id, name) VALUES (?, ?)", (issue_id, tag))
+        click.echo(f"Added: {tag}")
+
+    conn.commit()
+    conn.close()
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("tags", nargs=-1, required=True)
+def remove_tags(issue_id, tags):
+    """Remove tags from an issue."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    for tag in tags:
+        cursor.execute("SELECT id FROM tags WHERE issue_id = ? AND name = ?", (issue_id, tag))
+        row = cursor.fetchone()
+        if row is None:
+            click.echo(f"Not found: '{tag}' not on issue #{issue_id}")
+            continue
+
+        cursor.execute("DELETE FROM tags WHERE id = ?", (row[0],))
+        click.echo(f"Removed: {tag}")
+
+    conn.commit()
+    conn.close()
+
+
+@cli.command()
+@click.argument("old_tag")
+@click.argument("new_tag")
+def rename_tags(old_tag, new_tag):
+    """Rename a tag globally across all issues."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE tags SET name = ? WHERE name = ?", (new_tag, old_tag))
+    count = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    click.echo(f"Renamed '{old_tag}' → '{new_tag}' ({count} issues affected)")
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("text")
+def add_todo(issue_id, text):
+    """Add a todo to an issue."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO todos (issue_id, text, done) VALUES (?, ?, 0)", (issue_id, text))
+    index = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    click.echo(f"Todo added to issue #{issue_id}: {index}. {text}")
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("index", type=int)
+def check_todo(issue_id, index):
+    """Mark a todo as done."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, text, done FROM todos WHERE issue_id = ? ORDER BY id LIMIT 1 OFFSET ?", (issue_id, index - 1))
+    todo = cursor.fetchone()
+
+    if todo is None:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} not found")
+
+    todo_id, text, done = todo
+    if done:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} is already checked")
+
+    cursor.execute("UPDATE todos SET done = 1 WHERE id = ?", (todo_id,))
+    conn.commit()
+    conn.close()
+
+    click.echo(f'Todo #{index} checked: "{text}"')
+
+
+@cli.command()
+@click.argument("issue_id", type=int)
+@click.argument("index", type=int)
+def uncheck_todo(issue_id, index):
+    """Mark a todo as not done."""
+    _verify_issue_exists(issue_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, text, done FROM todos WHERE issue_id = ? ORDER BY id LIMIT 1 OFFSET ?", (issue_id, index - 1))
+    todo = cursor.fetchone()
+
+    if todo is None:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} not found")
+
+    todo_id, text, done = todo
+    if not done:
+        conn.close()
+        raise click.ClickException(f"Failed: Todo #{index} is already unchecked")
+
+    cursor.execute("UPDATE todos SET done = 0 WHERE id = ?", (todo_id,))
+    conn.commit()
+    conn.close()
+
+    click.echo(f'Todo #{index} unchecked: "{text}"')
+
+
 if __name__ == "__main__":
     cli()
