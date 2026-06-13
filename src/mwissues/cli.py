@@ -292,7 +292,9 @@ mwissues edit-todo 1 1 "Updated text"
 mwissues remove-todo 1 1
 ```
 
-### Import from JSON
+### Import from JSON (Primary Method)
+
+JSON import is the recommended way to add issues with todos.
 
 ```bash
 # From file
@@ -319,7 +321,7 @@ cat issues.json | mwissues import-issues
 ]
 ```
 
-Priority defaults to `B` if omitted. Validation errors abort entire import (all-or-nothing).
+Priority defaults to `B` if omitted. All fields except `title` are optional. Validation errors abort entire import (all-or-nothing).
 
 ### Web Interface
 
@@ -965,50 +967,75 @@ def edit_todo(issue_id, index, text):
     click.echo(f'Todo #{index} updated: "{text}"')
 
 
+_JSON_EXAMPLE = """
+JSON Format Example:
+
+[
+  {
+    "title": "Issue title",
+    "description": "Brief description",
+    "details": "Extended details, steps to reproduce, etc.",
+    "priority": "A",
+    "tags": ["bug", "auth"],
+    "todos": [
+      {"text": "Step 1", "done": false},
+      {"text": "Step 2", "done": true}
+    ]
+  }
+]
+
+Priority defaults to B if omitted. All fields except title are optional.
+"""
+
+
 @cli.command()
 @click.argument("source", required=False)
 def import_issues(source):
     """Import issues from JSON (file path or stdin).
-    
+
     Reads a JSON array of issues and inserts them in a single transaction.
-    
-    Examples:
-    
-        mwissues import-issues issues.json
-    
-        cat issues.json | mwissues import-issues
     """
     import sys
     import builtins
-    
+
     # Read JSON from file or stdin
     if source is not None:
         # Read from file path
         file_path = Path(source)
         if not file_path.exists():
-            raise click.ClickException(f"File not found: {source}")
+            click.echo(f"Error: File not found: {source}")
+            click.echo(_JSON_EXAMPLE)
+            return
         json_input = file_path.read_text()
     else:
         # Try to read from stdin
-        # Note: CliRunner's input= uses a StringIO that we access via sys.stdin
         if hasattr(sys.stdin, 'read'):
             json_input = sys.stdin.read()
             if not json_input or json_input.strip() == '':
-                raise click.ClickException("No input provided. Pass a file path or pipe JSON via stdin.")
+                click.echo("Error: No input provided. Pass a file path or pipe JSON via stdin.")
+                click.echo(_JSON_EXAMPLE)
+                return
         else:
-            raise click.ClickException("Cannot read from stdin.")
-    
+            click.echo("Error: Cannot read from stdin.")
+            click.echo(_JSON_EXAMPLE)
+            return
+
     # Parse JSON
     try:
         data = json.loads(json_input)
     except json.JSONDecodeError as e:
-        raise click.ClickException(f"Invalid JSON: {e}")
-    
+        click.echo(f"Error: Invalid JSON - {e}")
+        click.echo(_JSON_EXAMPLE)
+        return
+
     if not isinstance(data, builtins.list):
-        raise click.ClickException("JSON must be an array of issues")
-    
+        click.echo("Error: JSON must be an array of issues")
+        click.echo(_JSON_EXAMPLE)
+        return
+
     if len(data) == 0:
-        click.echo("No issues to import.")
+        click.echo("Error: No issues to import (empty array)")
+        click.echo(_JSON_EXAMPLE)
         return
     
     # Validate all entries first (before opening transaction)
@@ -1070,7 +1097,9 @@ def import_issues(source):
     if errors:
         for err in errors:
             click.echo(err, err=True)
-        raise click.ClickException("Validation failed. No issues imported.")
+        click.echo("Validation failed. No issues imported.")
+        click.echo(_JSON_EXAMPLE)
+        raise SystemExit(1)
     
     # All validations passed — insert all entries in a single transaction
     conn = sqlite3.connect(Path.cwd() / DB_NAME)
