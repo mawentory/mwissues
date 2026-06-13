@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+{# Header with back link and action buttons #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <a href="{{ url_for('index') }}" class="text-decoration-none">
+    &larr; Back to Issues
+  </a>
+  <div class="btn-group" role="group">
+    <a href="{{ url_for('edit_issue_page', issue_id=issue.id) }}" class="btn btn-outline-primary">
+      Edit
+    </a>
+    {% if issue.visibility == 'visible' %}
+      <form method="post" action="{{ url_for('hide_issue', issue_id=issue.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-outline-secondary">Hide</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('unhide_issue', issue_id=issue.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-outline-secondary">Unhide</button>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('delete_issue', issue_id=issue.id) }}" class="d-inline"
+          onsubmit="return confirm('Delete issue #{{ issue.id }}: {{ issue.title|escape }}? This cannot be undone.');">
+      <button type="submit" class="btn btn-outline-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+{# Issue header card #}
+<div class="card mb-4 {% if issue.visibility == 'hidden' %}border-warning bg-light{% endif %}">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <span class="text-muted small">Issue #{{ issue.id }}</span>
+        <h1 class="mb-2 mt-1">{{ issue.title }}</h1>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="badge badge-priority-{{ issue.priority }}">{{ issue.priority }}</span>
+          <span class="badge badge-status-{{ issue.status }}">{{ issue.status }}</span>
+          {% if issue.visibility == 'hidden' %}
+            <span class="badge bg-warning text-dark">hidden</span>
+          {% endif %}
+          <span class="text-muted small">Created {{ issue.created_at }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Tags #}
+{% if tags %}
+<div class="mb-4">
+  {% for tag in tags %}
+    <a href="{{ url_for('index') }}?tag={{ tag }}" class="tag-pill">{{ tag }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# Main content #}
+<div class="row g-4">
+  <div class="col-lg-8">
+    {# Description #}
+    {% if issue.description %}
+    <div class="mb-4">
+      <h5 class="text-muted mb-2">Description</h5>
+      <p class="lead">{{ issue.description }}</p>
+    </div>
+    {% endif %}
+
+    {# Details #}
+    {% if issue.details %}
+    <div class="mb-4">
+      <h5 class="text-muted mb-2">Details</h5>
+      <pre class="p-3 bg-light rounded">{{ issue.details }}</pre>
+    </div>
+    {% endif %}
+
+    {# Todos #}
+    <div class="card">
+      <div class="card-header fw-bold">
+        Todos
+        <span class="badge bg-secondary ms-2">{{ todos|length }}</span>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for todo in todos %}
+          <li class="list-group-item d-flex align-items-center gap-2 {% if todo.done %}todo-done bg-light{% endif %}">
+            {% if todo.done %}
+              <span class="text-success">&#10003;</span>
+              <span>{{ todo.text }}</span>
+            {% else %}
+              <span class="text-muted">&#9744;</span>
+              <span>{{ todo.text }}</span>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="list-group-item text-muted">No todos.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    {# Metadata card #}
+    <div class="card">
+      <div class="card-header fw-bold small text-muted text-uppercase">Metadata</div>
+      <ul class="list-group list-group-flush small">
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Priority</span>
+          <span class="badge badge-priority-{{ issue.priority }}">{{ issue.priority }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Status</span>
+          <span class="badge badge-status-{{ issue.status }}">{{ issue.status }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Visibility</span>
+          <span>{{ issue.visibility }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Created</span>
+          <span>{{ issue.created_at[:10] }}</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{# Bottom padding #}
+<div class="pb-5"></div>
+{% endblock %}

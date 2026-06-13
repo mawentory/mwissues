@@ -5,18 +5,25 @@
 
 {# Search & filters #}
 <form method="get" class="row g-2 mb-3" id="search-form">
-  <div class="col-md-4">
+  <div class="col-md-3">
     <input type="text" name="q" class="form-control" placeholder="Search title or description…" value="{{ q }}">
   </div>
   <div class="col-md-2">
     <select name="status" class="form-select" onchange="document.getElementById('search-form').submit()">
-      <option value="">All</option>
-      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
-      <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+      <option value="">All Status</option>
+      <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Open</option>
+      <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select name="visibility" class="form-select" onchange="document.getElementById('search-form').submit()">
+      <option value="visible" {% if visibility_filter == 'visible' %}selected{% endif %}>Visible only</option>
+      <option value="all" {% if visibility_filter == 'all' %}selected{% endif %}>All issues</option>
+      <option value="hidden" {% if visibility_filter == 'hidden' %}selected{% endif %}>Hidden only</option>
     </select>
   </div>
   <div class="col-auto">
-    <button type="submit" class="btn btn-primary">Search</button>
+    <button type="submit" class="btn btn-primary">Filter</button>
     <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Clear</a>
   </div>
 </form>
@@ -40,7 +47,8 @@
   {{ total }} issue{{ '' if total == 1 else 's' }}
   {% if tag_filter %} tagged <strong>{{ tag_filter }}</strong>{% endif %}
   {% if q %} matching <strong>{{ q }}</strong>{% endif %}
-  {% if status_filter != 'active' %} with status <strong>{{ status_filter }}</strong>{% endif %}
+  {% if status_filter and status_filter != '' %} with status <strong>{{ status_filter }}</strong>{% endif %}
+  {% if visibility_filter and visibility_filter != 'all' %} with visibility <strong>{{ visibility_filter }}</strong>{% endif %}
 </p>
 
 {# Issue table #}
@@ -60,12 +68,15 @@
       </thead>
       <tbody>
         {% for issue in issues %}
-          <tr>
+          <tr class="{% if issue.visibility == 'hidden' %}table-warning opacity-75{% endif %}">
             <td><a href="{{ url_for('show_issue', issue_id=issue.id) }}">{{ issue.id }}</a></td>
             <td><span class="badge badge-priority-{{ issue.priority }}">{{ issue.priority }}</span></td>
             <td><span class="badge badge-status-{{ issue.status }}">{{ issue.status }}</span></td>
             <td>
               <a href="{{ url_for('show_issue', issue_id=issue.id) }}" class="text-decoration-none">{{ issue.title }}</a>
+              {% if issue.visibility == 'hidden' %}
+                <span class="badge bg-warning text-dark ms-1" title="Hidden">H</span>
+              {% endif %}
             </td>
             <td>
               {% for tag in issue.tags %}
@@ -76,13 +87,17 @@
               {{ issue.todos_done }}/{{ issue.todos_total }}
             </td>
             <td class="text-end">
-              {% if issue.status == 'active' %}
-                <form method="post" action="{{ url_for('archive_issue', issue_id=issue.id) }}" class="d-inline">
-                  <button type="submit" class="btn btn-sm btn-outline-secondary">Archive</button>
+              {% if issue.visibility == 'visible' %}
+                <form method="post" action="{{ url_for('hide_issue', issue_id=issue.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Hide</button>
+                </form>
+              {% else %}
+                <form method="post" action="{{ url_for('unhide_issue', issue_id=issue.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Unhide</button>
                 </form>
               {% endif %}
               <form method="post" action="{{ url_for('delete_issue', issue_id=issue.id) }}" class="d-inline"
-                    onsubmit="return confirm('Delete issue #{{ issue.id }}? This cannot be undone.');">
+                    onsubmit="return confirm('Delete issue #{{ issue.id }}: {{ issue.title|escape }}? This cannot be undone.');">
                 <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
               </form>
             </td>

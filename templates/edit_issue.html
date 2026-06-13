@@ -1,39 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row mb-3">
-  <div class="col">
-    <a href="{{ url_for('index') }}">&larr; Back to Issues</a>
-  </div>
-  <div class="col-auto">
-    {% if issue.status == 'active' %}
-      <form method="post" action="{{ url_for('archive_issue', issue_id=issue.id) }}" class="d-inline">
-        <button type="submit" class="btn btn-outline-secondary">Archive</button>
-      </form>
-    {% endif %}
-    <form method="post" action="{{ url_for('delete_issue', issue_id=issue.id) }}" class="d-inline"
-          onsubmit="return confirm('Delete issue #{{ issue.id }}? This cannot be undone.');">
-      <button type="submit" class="btn btn-outline-danger">Delete</button>
-    </form>
-  </div>
+{# Header with back link #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <a href="{{ url_for('show_issue', issue_id=issue.id) }}" class="text-decoration-none">
+    &larr; Back to Issue #{{ issue.id }}
+  </a>
+  <a href="{{ url_for('show_issue', issue_id=issue.id) }}" class="btn btn-outline-secondary">
+    Cancel
+  </a>
 </div>
 
-{# Header #}
-<div class="card mb-4">
-  <div class="card-body">
-    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
-      <div>
-        <h3 class="mb-1">Issue #{{ issue.id }}</h3>
-        <p class="text-muted mb-1">
-          Created {{ issue.created_at }}
-          &nbsp;&mdash;&nbsp;
-          <span class="badge badge-priority-{{ issue.priority }}">{{ issue.priority }}</span>
-          <span class="badge badge-status-{{ issue.status }}">{{ issue.status }}</span>
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
+<h1 class="mb-4">Edit Issue #{{ issue.id }}</h1>
 
 {# Two-column layout #}
 <div class="row g-4">
@@ -76,8 +54,8 @@
             <div class="col-sm-4">
               <label class="form-label fw-semibold" for="status">Status</label>
               <select id="status" name="status" class="form-select">
-                <option value="active" {% if issue.status == 'active' %}selected{% endif %}>Active</option>
-                <option value="inactive" {% if issue.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                <option value="open" {% if issue.status == 'open' %}selected{% endif %}>Open</option>
+                <option value="closed" {% if issue.status == 'closed' %}selected{% endif %}>Closed</option>
               </select>
             </div>
           </div>

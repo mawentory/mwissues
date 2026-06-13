@@ -70,7 +70,8 @@ def build_issue_row(conn, issue_id):
 def index():
     q = (flask.request.args.get("q") or "").strip()
     tag_filter = (flask.request.args.get("tag") or "").strip()
-    status_filter = flask.request.args.get("status", "active").strip()
+    status_filter = flask.request.args.get("status", "open").strip()
+    visibility_filter = flask.request.args.get("visibility", "visible").strip()
     try:
         page = max(1, int(flask.request.args.get("page", 1)))
     except ValueError:
@@ -83,9 +84,14 @@ def index():
     # Build WHERE clause
     conditions = []
     params = []
-    if status_filter in ("active", "inactive"):
+    if status_filter in ("open", "closed"):
         conditions.append("i.status = ?")
         params.append(status_filter)
+    if visibility_filter in ("visible", "hidden"):
+        conditions.append("i.visibility = ?")
+        params.append(visibility_filter)
+    elif visibility_filter == "all":
+        pass  # No visibility filter
     if q:
         conditions.append("(i.title LIKE ? OR i.description LIKE ?)")
         params.extend([f"%{q}%", f"%{q}%"])
@@ -107,7 +113,7 @@ def index():
 
     rows = conn.execute(
         f"""
-        SELECT i.id, i.title, i.description, i.priority, i.status, i.created_at,
+        SELECT i.id, i.title, i.description, i.priority, i.status, i.visibility, i.created_at,
                SUM(t2.done) as todos_done,
                COUNT(t2.id) as todos_total
         FROM issues i
@@ -139,8 +145,10 @@ def index():
             args["q"] = q
         if tag_filter:
             args["tag"] = tag_filter
-        if status_filter != "active":
+        if status_filter != "open":
             args["status"] = status_filter
+        if visibility_filter != "visible":
+            args["visibility"] = visibility_filter
         if p > 1:
             args["page"] = p
         qs = "&".join(f"{k}={v}" for k, v in args.items())
@@ -153,6 +161,7 @@ def index():
         q=q,
         tag_filter=tag_filter,
         status_filter=status_filter,
+        visibility_filter=visibility_filter,
         page=page,
         total_pages=total_pages,
         total=total,
@@ -206,7 +215,26 @@ def show_issue(issue_id):
 
     issue, tags, todos = result
     return flask.render_template(
-        "issue.html",
+        "view_issue.html",
+        issue=issue,
+        tags=tags,
+        todos=todos,
+        priority_labels=PRIORITY_LABELS,
+    )
+
+
+@app.route("/issue/<int:issue_id>/edit", methods=["GET"])
+def edit_issue_page(issue_id):
+    conn = get_db()
+    result = build_issue_row(conn, issue_id)
+    conn.close()
+
+    if result is None:
+        flask.abort(404)
+
+    issue, tags, todos = result
+    return flask.render_template(
+        "edit_issue.html",
         issue=issue,
         tags=tags,
         todos=todos,
@@ -240,7 +268,7 @@ def edit_issue(issue_id):
     if priority in PRIORITY_LABELS:
         fields.append("priority = ?")
         values.append(priority)
-    if status in ("active", "inactive"):
+    if status in ("open", "closed"):
         fields.append("status = ?")
         values.append(status)
 
@@ -257,19 +285,41 @@ def edit_issue(issue_id):
     return flask.redirect(flask.url_for("show_issue", issue_id=issue_id))
 
 
-@app.route("/issue/<int:issue_id>/archive", methods=["POST"])
-def archive_issue(issue_id):
+@app.route("/issue/<int:issue_id>/hide", methods=["POST"])
+def hide_issue(issue_id):
     if not issue_exists(issue_id):
         flask.flash(f"Issue #{issue_id} not found.", "danger")
         return flask.redirect(flask.url_for("index"))
 
     conn = get_db()
-    conn.execute("UPDATE issues SET status = 'inactive' WHERE id = ?", (issue_id,))
+    conn.execute("UPDATE issues SET visibility = 'hidden' WHERE id = ?", (issue_id,))
     conn.commit()
     conn.close()
 
-    flask.flash(f"Issue #{issue_id} archived.", "success")
+    flask.flash(f"Issue #{issue_id} hidden.", "success")
     return flask.redirect(flask.url_for("index"))
+
+
+@app.route("/issue/<int:issue_id>/unhide", methods=["POST"])
+def unhide_issue(issue_id):
+    if not issue_exists(issue_id):
+        flask.flash(f"Issue #{issue_id} not found.", "danger")
+        return flask.redirect(flask.url_for("index"))
+
+    conn = get_db()
+    conn.execute("UPDATE issues SET visibility = 'visible' WHERE id = ?", (issue_id,))
+    conn.commit()
+    conn.close()
+
+    flask.flash(f"Issue #{issue_id} unhidden.", "success")
+    return flask.redirect(flask.url_for("index"))
+
+
+@app.route("/issue/<int:issue_id>/archive", methods=["POST"])
+def archive_issue(issue_id):
+    """Deprecated: redirects to hide."""
+    flask.flash("'archive' is deprecated. Use 'hide' instead.", "warning")
+    return hide_issue(issue_id)
 
 
 @app.route("/issue/<int:issue_id>/delete", methods=["POST"])

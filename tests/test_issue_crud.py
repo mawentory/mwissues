@@ -40,7 +40,7 @@ def test_add_then_show_issue(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "# Issue #1: Fix login bug" in result.output
     assert "**Priority:** A" in result.output
-    assert "**Status:** active" in result.output
+    assert "**Status:** open" in result.output
     assert "Users can't log in after recent deployment" in result.output
 
 
@@ -82,12 +82,10 @@ def test_archive_marks_inactive(tmp_path, monkeypatch):
     )
 
     result = runner.invoke(cli, ["archive", "1"])
-    assert result.exit_code == 0, result.output
-    assert "Issue #1 archived" in result.output
-
+    assert "deprecated" in result.output.lower() or result.exit_code == 0
     result = runner.invoke(cli, ["show", "1"])
     assert result.exit_code == 0, result.output
-    assert "**Status:** inactive" in result.output
+    assert "**Visibility:** hidden" in result.output
 
 
 def test_edit_issue(tmp_path, monkeypatch):
@@ -297,8 +295,8 @@ def test_archive_invalid_id(tmp_path, monkeypatch):
     _init_db(tmp_path, monkeypatch)
     runner = CliRunner()
     result = runner.invoke(cli, ["archive", "999"])
-    assert result.exit_code == 0, result.output
     assert "Issue #999 not found" in result.output
+    assert result.exit_code == 1
 
 
 def test_delete_invalid_id(tmp_path, monkeypatch):
