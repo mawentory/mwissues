@@ -1166,12 +1166,11 @@ def start(port, no_browser):
     from pathlib import Path
     import sys
 
-    # Add project root to path so webapp can be imported
     _root = Path(__file__).resolve().parent.parent.parent
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
-    from webapp import app
+    from mwissues.webapp import app
 
     if not no_browser:
         try:
@@ -1199,7 +1198,7 @@ def restart(port, no_browser):
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
-    from webapp import app
+    from mwissues.webapp import app
 
     if not no_browser:
         try:
