@@ -1,5 +1,6 @@
 """mwissues Flask web app — mirrors all CLI functionality."""
 import math
+import markdown
 import re
 from pathlib import Path
 
@@ -13,6 +14,14 @@ app = flask.Flask(__name__)
 app.secret_key = "mwissues-secret-key-change-in-production"
 
 DB_PATH = Path.cwd() / DB_NAME
+
+# Markdown filter for Jinja2 templates
+@app.template_filter("markdown")
+def render_markdown(text):
+    """Render markdown to HTML with sanitization."""
+    if not text:
+        return ""
+    return markdown.markdown(text, extensions=["fenced_code", "tables", "sane_lists"])
 
 # ---------------------------------------------------------------------------
 # Priority helpers

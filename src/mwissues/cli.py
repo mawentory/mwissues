@@ -215,6 +215,7 @@ Personal issue tracker for managing tasks, bugs, and feature requests.
 ## Web Interface
 
 - `mwissues web start [--port <port>] [--no-browser]` - Start the web interface (Ctrl+C to stop)
+- `mwissues web restart [--port <port>] [--no-browser]` - Stop any existing server and start fresh
 
 ## Status and Visibility
 
@@ -785,15 +786,76 @@ def web():
     """Manage the local web server."""
 
 
+def _is_port_in_use(port):
+    """Check if a port is already in use."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _kill_port(port):
+    """Kill any process using the specified port."""
+    import subprocess
+    try:
+        # Find PIDs using the port
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True
+        )
+        if result.stdout.strip():
+            pids = result.stdout.strip().split("\n")
+            for pid in pids:
+                try:
+                    subprocess.run(["kill", "-9", pid], check=False)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 @web.command()
 @click.option("--port", default=5173, show_default=True, type=int, help="Port to listen on")
 @click.option("--no-browser", is_flag=True, help="Do not open a browser window")
 def start(port, no_browser):
     """Start the web interface."""
+    if _is_port_in_use(port):
+        click.echo(f"Error: Port {port} is already in use.")
+        click.echo(f"Use 'mwissues web restart' to stop the existing server and start fresh.")
+        return
+
     from pathlib import Path
     import sys
 
     # Add project root to path so webapp can be imported
+    _root = Path(__file__).resolve().parent.parent.parent
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+    from webapp import app
+
+    if not no_browser:
+        try:
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{port}")
+        except Exception:
+            pass
+
+    click.echo(f"Web running on http://127.0.0.1:{port} — press Ctrl+C to stop")
+    app.run(host="127.0.0.1", port=port)
+
+
+@web.command()
+@click.option("--port", default=5173, show_default=True, type=int, help="Port to listen on")
+@click.option("--no-browser", is_flag=True, help="Do not open a browser window")
+def restart(port, no_browser):
+    """Stop any existing server and start fresh."""
+    _kill_port(port)
+    click.echo("Starting web server...")
+
+    from pathlib import Path
+    import sys
+
     _root = Path(__file__).resolve().parent.parent.parent
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))

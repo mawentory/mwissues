@@ -62,7 +62,7 @@
     {% if issue.description %}
     <div class="mb-4">
       <h5 class="text-muted mb-2">Description</h5>
-      <p class="lead">{{ issue.description }}</p>
+      <div class="lead markdown-body">{{ issue.description|markdown|safe }}</div>
     </div>
     {% endif %}
 
@@ -70,7 +70,7 @@
     {% if issue.details %}
     <div class="mb-4">
       <h5 class="text-muted mb-2">Details</h5>
-      <pre class="p-3 bg-light rounded">{{ issue.details }}</pre>
+      <div class="markdown-body">{{ issue.details|markdown|safe }}</div>
     </div>
     {% endif %}
 
