@@ -44,6 +44,7 @@ A CLI tool `mwissues` that manages issues stored in a SQLite database. Issues ha
 | `mwissues edit <id> [--title "..."] [--description "..."] [--details "..."] [--priority A-E]` | Edit issue |
 | `mwissues archive <id>` | Mark as inactive (manual archive) |
 | `mwissues delete <id>` | Permanently delete |
+| `mwissues import-issues [file.json]` | Import issues from JSON (file or stdin) |
 | `mwissues query <text> [--status ...]` | Search by title, description, details, todos, tags |
 
 ### Todo Management
@@ -63,6 +64,53 @@ A CLI tool `mwissues` that manages issues stored in a SQLite database. Issues ha
 | `mwissues add-tags <id> <tag1> [tag2]...` | Add tags (plural - multiple at once) |
 | `mwissues remove-tags <id> <tag1> [tag2]...` | Remove tags (plural) |
 | `mwissues rename-tags <old> <new>` | Rename tag globally |
+
+### Import
+
+| Command | Description |
+|---------|-------------|
+| `mwissues import-issues [file.json]` | Import issues from JSON file or stdin |
+
+**JSON Format:**
+
+```json
+[
+  {
+    "title": "Issue title",
+    "description": "Brief description",
+    "details": "Extended details",
+    "priority": "A",
+    "tags": ["bug", "auth"],
+    "todos": [
+      {"text": "Step 1", "done": false},
+      {"text": "Step 2", "done": true}
+    ]
+  }
+]
+```
+
+**Field rules:**
+- `title` — required, non-empty string
+- `description` — optional, string
+- `details` — optional, string
+- `priority` — optional, one of `A/B/C/D/E`, defaults to `B`
+- `tags` — optional, array of strings
+- `todos` — optional, array of `{text: string, done?: boolean}`
+
+**Behavior:**
+- All entries inserted in a single transaction (all-or-nothing)
+- Validation errors show index and field, no data is written
+- Output: `Imported N issues successfully`
+
+**Examples:**
+
+```bash
+# From file
+mwissues import-issues issues.json
+
+# From stdin
+cat issues.json | mwissues import-issues
+```
 
 ## Output Formats
 

@@ -194,80 +194,264 @@ INSTRUCTIONS_CONTENT = """# mwissues
 
 Personal issue tracker for managing tasks, bugs, and feature requests.
 
-## Commands
-
-- `mwissues init [-d|--default] [-v|--verbose]` - Initialize database and instructions; `--default` restores `mwissues.md` without touching the database; `--verbose` shows migration details
-- `mwissues add <title> [-d <description>] [--details <details>] [-p <priority>]` - Add new issue
-- `mwissues list [--json|--human] [--all]` - List issues (use `--all` to include hidden)
-- `mwissues show <id>` - Show issue details
-- `mwissues hide <id>` - Hide an issue from the default list
-- `mwissues unhide <id>` - Make a hidden issue visible again
-- `mwissues delete <id>` - Permanently delete an issue
-- `mwissues add-tags <id> <tag>...` - Add tags to an issue
-- `mwissues remove-tags <id> <tag>...` - Remove tags from an issue
-- `mwissues rename-tags <old> <new>` - Rename a tag across all issues
-- `mwissues add-todo <id> <text>` - Add a todo to an issue
-- `mwissues check-todo <id> <index>` - Mark a todo as done
-- `mwissues uncheck-todo <id> <index>` - Mark a todo as not done
-- `mwissues remove-todo <id> <index>` - Remove a todo
-- `mwissues edit-todo <id> <index> <text>` - Edit todo text
-
-## Web Interface
-
-- `mwissues web start [--port <port>] [--no-browser]` - Start the web interface (Ctrl+C to stop)
-- `mwissues web restart [--port <port>] [--no-browser]` - Stop any existing server and start fresh
-
-## Status and Visibility
-
-- **Status**: `open` (default) or `closed` - workflow state (mark as done/resolved)
-- **Visibility**: `visible` (default) or `hidden` - controls whether issue appears in default list
-
-## Tag Notes
-
-- Tags are case-sensitive, unique per issue, and similar to username in term of rules. example tags: auth, bug, upload-image
-- Use multiple tags in one command for batch operations.
-- `add-tags` skips tags that already exist on the issue.
-- `rename-tags` updates every occurrence of the old tag.
-
-## Examples
+## Quick Start
 
 ```bash
-# Initialize
-mwissues init
+mwissues init                    # Initialize database
+mwissues add "Title" -d "Desc" -p A   # Add issue (priority A-E required)
+mwissues list                    # Show all visible issues
+mwissues show 1                  # Show issue #1 details
+```
 
-# Add an issue
-mwissues add "Fix login bug" -d "Users cannot log in with special chars" --details "Steps to reproduce:\n1. Go to /login\n2. Enter credentials" -p A
+## Issue Structure
+
+Every issue has:
+- **title** (required) — What needs to be done
+- **description** (required) — Brief summary for list view
+- **details** (optional) — Extended info, steps to reproduce, etc.
+- **priority** (required) — A, B, C, D, or E
+- **status** — `open` (default) or `closed`
+- **visibility** — `visible` (default) or `hidden`
+- **tags** — Optional labels (e.g., `bug`, `auth`, `frontend`)
+- **todos** — Optional checklist items with check/uncheck
+
+## Priority System
+
+| Priority | Label | When to Use |
+|----------|-------|-------------|
+| A | Must Do | High consequence if not done. Blockers, critical bugs |
+| B | Should Do | Important but no major consequences if delayed |
+| C | Nice to Do | Extra features if time allows |
+| D | Think about | Tasks requiring review and deliberation |
+| E | Eliminate | Unnecessary tasks, remove if possible |
+
+## Commands
+
+### Issue Management
+
+```bash
+# Add issue (ALL fields are space-separated after flags)
+mwissues add "Fix login bug" -d "Users cannot log in" -p A
+mwissues add "Add dark mode" -d "Support dark theme" -p B --details "Consider CSS variables"
 
 # List issues
-mwissues list
-mwissues list --human
-mwissues list --all  # includes hidden issues
+mwissues list                    # Markdown output (default, LLM-friendly)
+mwissues list --human           # Pretty table (human readers)
+mwissues list --json            # JSON output
+mwissues list --all             # Include hidden issues
 
-# Show details
+# Show issue details
 mwissues show 1
 
-# Hide/Unhide
+# Edit issue
+mwissues edit 1 --title "New title"
+mwissues edit 1 --description "New desc"
+mwissues edit 1 --priority C
+mwissues edit 1 --details "New details"
+mwissues edit 1 --title "X" --description "Y" --priority A  # Multiple fields
+
+# Hide/Unhide (not deleted, just invisible in default list)
 mwissues hide 1
 mwissues unhide 1
 
-# Delete
+# Delete permanently
 mwissues delete 1
 
-# Tag management
-mwissues add-tags 1 auth bug
-mwissues add-tags 1 frontend
+# Close an issue (mark as done)
+mwissues edit 1 --status closed
+```
+
+### Tag Management
+
+```bash
+# Add tags (multiple at once)
+mwissues add-tags 1 bug auth
+
+# Remove tags
 mwissues remove-tags 1 bug
+
+# Rename tag globally (updates ALL issues with this tag)
 mwissues rename-tags auth login
-mwissues remove-tags 1 auth login
+```
 
-# Todo management
-mwissues add-todo 1 "Write unit tests"
-mwissues check-todo 1 1
-mwissues edit-todo 1 1 "Write comprehensive tests"
+**Tag Rules:**
+- Case-sensitive: `Bug` ≠ `bug`
+- Unique per issue: adding `bug` twice only adds it once
+- Format: lowercase, hyphens allowed (e.g., `upload-image`)
+
+### Todo Management
+
+```bash
+# Add todo
+mwissues add-todo 1 "Write failing test"
+
+# Todos are 1-indexed (first todo = index 1)
+mwissues check-todo 1 1      # Mark done
+mwissues uncheck-todo 1 1     # Mark not done
+mwissues edit-todo 1 1 "Updated text"
 mwissues remove-todo 1 1
+```
 
-# Web interface
-mwissues web start
+### Import from JSON
+
+```bash
+# From file
+mwissues import-issues issues.json
+
+# From stdin
+cat issues.json | mwissues import-issues
+```
+
+**JSON Format:**
+```json
+[
+  {
+    "title": "Issue title",
+    "description": "Brief description",
+    "details": "Extended details",
+    "priority": "A",
+    "tags": ["bug", "auth"],
+    "todos": [
+      {"text": "Step 1", "done": false},
+      {"text": "Step 2", "done": true}
+    ]
+  }
+]
+```
+
+Priority defaults to `B` if omitted. Validation errors abort entire import (all-or-nothing).
+
+### Web Interface
+
+```bash
+mwissues web start [--port 5173]    # Start server
+mwissues web start --no-browser     # Don't open browser
+```
+
+## Common Patterns
+
+### Reading Issues for LLM Context
+
+```bash
+# Get all visible issues in markdown (best for LLM)
+mwissues list
+
+# Get specific issue with all details
+mwissues show 1
+
+# Get JSON for programmatic access
+mwissues list --json
+```
+
+### Creating Issues from LLM
+
+```bash
+# Basic issue
+mwissues add "Fix bug in X" -d "Brief summary" -p A
+
+# With details for complex issues
+mwissues add "Fix login bug" -d "Users cannot authenticate" -p A --details "Steps:
+1. Go to /login
+2. Enter credentials
+3. Observe 500 error
+
+Root cause: Null pointer in auth.py line 42"
+
+# Adding tags after creation
+mwissues add-tags 1 bug auth
+mwissues add-todo 1 "Check logs"
+mwissues add-todo 1 "Reproduce issue"
+```
+
+### Updating Issues
+
+```bash
+# Mark as done
+mwissues edit 1 --status closed
+
+# Update priority
+mwissues edit 1 --priority A
+
+# Add progress via todos
+mwissues add-todo 1 "Research phase"
+mwissues check-todo 1 1
+```
+
+## Issue Writing Best Practices
+
+### Tracer Bullets (Vertical Slices)
+
+Each issue should be a **vertical slice** that cuts through all layers end-to-end:
+
+- **Good**: "Add JSON import command" — covers CLI, validation, database, tests
+- **Bad**: "Add import validation" — only one layer, leaves integration incomplete
+
+A completed slice is demoable or verifiable on its own. Prefer many thin slices over few thick ones.
+
+### AFK vs HITL
+
+Mark each issue with one of these prefixes:
+
+- **AFK** — Can be implemented and merged without human interaction
+- **HITL** — Requires human interaction: architectural decisions, design reviews, manual testing
+
+Prefer AFK over HITL where possible. If unsure, ask.
+
+```bash
+# AFK issue
+mwissues add "Add JSON import" -d "CLI command for batch import" -p B
+mwissues add-tags 1 enhancement
+
+# HITL issue
+mwissues add "[HITL] Design new dashboard UI" -d "Need design review before implementation" -p B
+mwissues add-tags 1 enhancement
+```
+
+### Issue Template
+
+For complex work, use this structure in the `details` field:
+
+```bash
+mwissues add "Feature name" -d "Brief summary" -p B --details "## What to build
+
+End-to-end behavior description. What does the user experience when this is done?
+
+## Acceptance criteria
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Criterion 3
+
+## Blocked by
+
+- Issue #N (if any)
+
+## Notes
+
+Any context, trade-offs, or decisions that inform implementation."
+```
+
+### Blocking Relationships
+
+Express dependencies clearly:
+
+```bash
+# Issue 5 is blocked by issue 3
+mwissues add "Feature X" -d "Blocked until Y is done" -p B --details "## Blocked by
+
+- #3 (must complete first)"
+```
+
+When blocking issues are done, update the dependent:
+
+```bash
+mwissues edit 5 --details "## Blocked by
+
+- #3 ✓ (done)
+
+## What to build
+
+..."
 ```
 """
 
@@ -779,6 +963,161 @@ def edit_todo(issue_id, index, text):
     conn.close()
 
     click.echo(f'Todo #{index} updated: "{text}"')
+
+
+@cli.command()
+@click.argument("source", required=False)
+def import_issues(source):
+    """Import issues from JSON (file path or stdin).
+    
+    Reads a JSON array of issues and inserts them in a single transaction.
+    
+    Examples:
+    
+        mwissues import-issues issues.json
+    
+        cat issues.json | mwissues import-issues
+    """
+    import sys
+    import builtins
+    
+    # Read JSON from file or stdin
+    if source is not None:
+        # Read from file path
+        file_path = Path(source)
+        if not file_path.exists():
+            raise click.ClickException(f"File not found: {source}")
+        json_input = file_path.read_text()
+    else:
+        # Try to read from stdin
+        # Note: CliRunner's input= uses a StringIO that we access via sys.stdin
+        if hasattr(sys.stdin, 'read'):
+            json_input = sys.stdin.read()
+            if not json_input or json_input.strip() == '':
+                raise click.ClickException("No input provided. Pass a file path or pipe JSON via stdin.")
+        else:
+            raise click.ClickException("Cannot read from stdin.")
+    
+    # Parse JSON
+    try:
+        data = json.loads(json_input)
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"Invalid JSON: {e}")
+    
+    if not isinstance(data, builtins.list):
+        raise click.ClickException("JSON must be an array of issues")
+    
+    if len(data) == 0:
+        click.echo("No issues to import.")
+        return
+    
+    # Validate all entries first (before opening transaction)
+    VALID_PRIORITIES = ["A", "B", "C", "D", "E"]
+    errors = []
+    
+    for idx, item in enumerate(data):
+        if not isinstance(item, dict):
+            errors.append(f"Error at index {idx}: item must be an object")
+            continue
+        
+        # title is required and must be non-empty string
+        if "title" not in item:
+            errors.append(f"Error at index {idx}: field 'title' is required")
+        elif not isinstance(item["title"], str):
+            errors.append(f"Error at index {idx}: field 'title' must be a string")
+        elif not item["title"].strip():
+            errors.append(f"Error at index {idx}: field 'title' cannot be empty")
+        
+        # priority must be one of A, B, C, D, E if provided
+        if "priority" in item:
+            if item["priority"] not in VALID_PRIORITIES:
+                errors.append(
+                    f"Error at index {idx}: field 'priority' must be one of {', '.join(VALID_PRIORITIES)} (got '{item['priority']}')"
+                )
+        
+        # description must be string if provided
+        if "description" in item and not isinstance(item["description"], str):
+            errors.append(f"Error at index {idx}: field 'description' must be a string")
+        
+        # details must be string if provided
+        if "details" in item and not isinstance(item["details"], str):
+            errors.append(f"Error at index {idx}: field 'details' must be a string")
+        
+        # tags must be array of strings if provided
+        if "tags" in item:
+            if not isinstance(item["tags"], builtins.list):
+                errors.append(f"Error at index {idx}: field 'tags' must be an array")
+            else:
+                for ti, tag in enumerate(item["tags"]):
+                    if not isinstance(tag, str):
+                        errors.append(f"Error at index {idx}: field 'tags'[{ti}] must be a string")
+        
+        # todos must be array of objects with text (string) and done (boolean, optional)
+        if "todos" in item:
+            if not isinstance(item["todos"], builtins.list):
+                errors.append(f"Error at index {idx}: field 'todos' must be an array")
+            else:
+                for ti, todo in enumerate(item["todos"]):
+                    if not isinstance(todo, dict):
+                        errors.append(f"Error at index {idx}: field 'todos'[{ti}] must be an object")
+                    elif "text" not in todo:
+                        errors.append(f"Error at index {idx}: field 'todos'[{ti}] 'text' is required")
+                    elif not isinstance(todo["text"], str):
+                        errors.append(f"Error at index {idx}: field 'todos'[{ti}] 'text' must be a string")
+                    if "done" in todo and type(todo["done"]) is not bool:
+                        errors.append(f"Error at index {idx}: field 'todos'[{ti}] 'done' must be a boolean")
+    
+    if errors:
+        for err in errors:
+            click.echo(err, err=True)
+        raise click.ClickException("Validation failed. No issues imported.")
+    
+    # All validations passed — insert all entries in a single transaction
+    conn = sqlite3.connect(Path.cwd() / DB_NAME)
+    cursor = conn.cursor()
+    
+    imported_count = 0
+    try:
+        for item in data:
+            title = item["title"]
+            description = item.get("description", "")
+            details = item.get("details", "")
+            priority = item.get("priority", "B")
+            tags = item.get("tags", [])
+            todos = item.get("todos", [])
+            
+            cursor.execute(
+                "INSERT INTO issues (title, description, details, priority) VALUES (?, ?, ?, ?)",
+                (title, description, details, priority),
+            )
+            issue_id = cursor.lastrowid
+            
+            # Insert tags
+            for tag in tags:
+                cursor.execute(
+                    "INSERT INTO tags (issue_id, name) VALUES (?, ?)",
+                    (issue_id, tag),
+                )
+            
+            # Insert todos
+            for todo in todos:
+                todo_text = todo["text"]
+                todo_done = 1 if todo.get("done", False) else 0
+                cursor.execute(
+                    "INSERT INTO todos (issue_id, text, done) VALUES (?, ?, ?)",
+                    (issue_id, todo_text, todo_done),
+                )
+            
+            imported_count += 1
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise click.ClickException(f"Import failed: {e}. Transaction rolled back.")
+    
+    conn.close()
+    click.echo(f"Imported {imported_count} issues successfully")
 
 
 @cli.group()

@@ -304,3 +304,152 @@ def test_delete_invalid_id(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(cli, ["delete", "999"])
     assert "Issue #999 not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Import tests
+# ---------------------------------------------------------------------------
+
+import json
+
+
+def test_import_valid_stdin(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {"title": "Fix auth", "description": "Users can't log in", "priority": "A"},
+        {"title": "Add dark mode", "description": "Support dark theme", "priority": "B"},
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code == 0, result.output
+    assert "Imported 2 issues successfully" in result.output
+
+    result = runner.invoke(cli, ["list", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert len(data["issues"]) == 2
+    titles = [i["title"] for i in data["issues"]]
+    assert "Fix auth" in titles
+    assert "Add dark mode" in titles
+
+
+def test_import_valid_file(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_file = tmp_path / "issues.json"
+    json_file.write_text(json.dumps([
+        {"title": "Bug in parser", "description": "Parser fails", "priority": "A"},
+        {"title": "Feature request", "description": "Add export", "priority": "C"},
+    ]))
+
+    result = runner.invoke(cli, ["import-issues", str(json_file)])
+    assert result.exit_code == 0, result.output
+    assert "Imported 2 issues successfully" in result.output
+
+    result = runner.invoke(cli, ["list", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert len(data["issues"]) == 2
+
+
+def test_import_default_priority(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {"title": "Issue without priority"},
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code == 0, result.output
+    assert "Imported 1 issues successfully" in result.output
+
+    result = runner.invoke(cli, ["show", "1"])
+    assert result.exit_code == 0, result.output
+    assert "**Priority:** B" in result.output
+
+
+def test_import_missing_title(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {"description": "No title provided"},
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code != 0
+    assert "Error at index 0: field 'title' is required" in result.output
+
+    result = runner.invoke(cli, ["list", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert len(data["issues"]) == 0
+
+
+def test_import_invalid_priority(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {"title": "Bad priority", "priority": "Z"},
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code != 0
+    assert "Error at index 0: field 'priority' must be one of A, B, C, D, E" in result.output
+
+    result = runner.invoke(cli, ["list", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert len(data["issues"]) == 0
+
+
+def test_import_partial_invalid_rollback(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {"title": "Valid issue", "description": "This one is fine"},
+        {"description": "Missing title"},
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code != 0
+    assert "Error at index 1: field 'title' is required" in result.output
+
+    result = runner.invoke(cli, ["list", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert len(data["issues"]) == 0
+
+
+def test_import_with_tags_and_todos(tmp_path, monkeypatch):
+    _init_db(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    json_data = json.dumps([
+        {
+            "title": "Complex issue",
+            "description": "With tags and todos",
+            "priority": "A",
+            "tags": ["bug", "auth"],
+            "todos": [
+                {"text": "Check logs", "done": False},
+                {"text": "Reproduce bug", "done": True},
+            ],
+        },
+    ])
+
+    result = runner.invoke(cli, ["import-issues"], input=json_data)
+    assert result.exit_code == 0, result.output
+    assert "Imported 1 issues successfully" in result.output
+
+    result = runner.invoke(cli, ["show", "1"])
+    assert result.exit_code == 0, result.output
+    assert "**Tags:** bug, auth" in result.output
+    assert "- [ ] 1. Check logs" in result.output
+    assert "- [x] 2. Reproduce bug" in result.output
